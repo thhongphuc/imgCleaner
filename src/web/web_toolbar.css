@@ -1,0 +1,121 @@
+.web-shell {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	width: 100vw;
+	overflow: hidden;
+	background: var(--ec-color-bg);
+	color: var(--ec-color-text);
+}
+
+.web-shell > .app {
+	flex: 1;
+	min-height: 0;
+	height: auto;
+}
+
+.web-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 44px;
+	padding: 0 var(--ec-space-4);
+	background: var(--ec-color-surface);
+	border-bottom: 1px solid var(--ec-color-border);
+	flex-shrink: 0;
+	gap: var(--ec-space-3);
+	font-family: var(--ec-font-family);
+	user-select: none;
+}
+
+.web-toolbar__brand {
+	display: flex;
+	align-items: center;
+	gap: var(--ec-space-2);
+	min-width: 0;
+}
+
+.web-toolbar__title {
+	font-size: 13px;
+	font-weight: var(--ec-font-weight-semibold);
+	color: var(--ec-color-text);
+	letter-spacing: -0.01em;
+}
+
+.web-toolbar__badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--ec-color-bg);
+	border: 1px solid var(--ec-color-border);
+	color: var(--ec-color-text-secondary);
+	white-space: nowrap;
+}
+
+.web-toolbar__dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #22c55e;
+	flex-shrink: 0;
+}
+
+.web-toolbar__dot--loading {
+	background: #f59e0b;
+	animation: web-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes web-pulse {
+	0%,
+	100% {
+		opacity: 0.35;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+.web-toolbar__actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ec-space-2);
+}
+
+.web-toolbar__download-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 12px;
+	border-radius: 6px;
+	border: none;
+	background: var(--ec-color-accent);
+	color: #ffffff;
+	font-family: var(--ec-font-family);
+	font-size: 12px;
+	font-weight: var(--ec-font-weight-semibold);
+	cursor: pointer;
+	transition: opacity 0.15s ease;
+}
+
+.web-toolbar__download-btn:hover {
+	opacity: 0.9;
+}
+
+.web-toolbar__download-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Make individual row download button clearly visible in Web App */
+.web-shell .file-table__reveal {
+	opacity: 0.75;
+}
+
+.web-shell .file-table__reveal:hover {
+	opacity: 1;
+	color: var(--ec-color-accent);
+}

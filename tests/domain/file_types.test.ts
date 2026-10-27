@@ -1,0 +1,271 @@
+import { it, expect } from "vitest";
+import {
+	isRawFile,
+	isSupportedFile,
+	isMediaFile,
+	isTiffFile,
+	requiresVerifiedWrite,
+	copyModeLeakCheckDemandOf,
+	requiresCopyModeLeakCheck,
+	RAW_EXTENSIONS,
+	MEDIA_EXTENSIONS,
+	TIFF_EXTENSIONS,
+} from "../../src/domain/files/file_types";
+
+it("returns true for supported image extensions", () => {
+	expect(isSupportedFile({ filename: "photo.jpg" })).toBe(true);
+	expect(isSupportedFile({ filename: "image.png" })).toBe(true);
+	expect(isSupportedFile({ filename: "pic.webp" })).toBe(true);
+	expect(isSupportedFile({ filename: "shot.heic" })).toBe(true);
+});
+
+it("returns true for supported media extensions", () => {
+	expect(isSupportedFile({ filename: "video.mp4" })).toBe(true);
+	expect(isSupportedFile({ filename: "clip.mov" })).toBe(true);
+	expect(isSupportedFile({ filename: "audio.m4a" })).toBe(true);
+});
+
+it("returns true for PDF", () => {
+	expect(isSupportedFile({ filename: "document.pdf" })).toBe(true);
+});
+
+it("returns false for unsupported extensions", () => {
+	expect(isSupportedFile({ filename: "readme.txt" })).toBe(false);
+	expect(isSupportedFile({ filename: "report.doc" })).toBe(false);
+	expect(isSupportedFile({ filename: "movie.mkv" })).toBe(false);
+	expect(isSupportedFile({ filename: "report.docx" })).toBe(false);
+	expect(isSupportedFile({ filename: "malware.exe" })).toBe(false);
+});
+
+it("returns false for files without extension", () => {
+	expect(isSupportedFile({ filename: "noext" })).toBe(false);
+});
+
+it("is case insensitive", () => {
+	expect(isSupportedFile({ filename: "PHOTO.JPG" })).toBe(true);
+	expect(isSupportedFile({ filename: "Image.Png" })).toBe(true);
+});
+
+it("classifies exactly the supported RAW extensions case-insensitively", () => {
+	expect([...RAW_EXTENSIONS]).toEqual([
+		".raf",
+		".cr2",
+		".cr3",
+		".nef",
+		".arw",
+		".orf",
+		".rw2",
+		".dng",
+		".pef",
+		".srw",
+	]);
+	expect(isRawFile({ filename: "sample.raf" })).toBe(true);
+	expect(isRawFile({ filename: "sample.RAF" })).toBe(true);
+	expect(isRawFile({ filename: "sample.jpg" })).toBe(false);
+});
+
+it("classifies exactly the seven supported media extensions case-insensitively", () => {
+	expect([...MEDIA_EXTENSIONS]).toEqual([
+		".mp4",
+		".mov",
+		".avi",
+		".m4a",
+		".m4v",
+		".3gp",
+		".wmv",
+	]);
+	expect(isMediaFile({ filename: "sample.mp4" })).toBe(true);
+	expect(isMediaFile({ filename: "sample.M4A" })).toBe(true);
+	expect(isMediaFile({ filename: "sample.mkv" })).toBe(false);
+	expect(isMediaFile({ filename: "sample.jpg" })).toBe(false);
+});
+
+it("classifies exactly the two supported TIFF extensions, case-insensitively, with last-extension and empty/degenerate edges (D-23)", () => {
+	expect([...TIFF_EXTENSIONS]).toEqual([".tif", ".tiff"]);
+	expect(isTiffFile({ filename: "scan.tif" })).toBe(true);
+	expect(isTiffFile({ filename: "scan.tiff" })).toBe(true);
+	expect(isTiffFile({ filename: "PHOTO.TIF" })).toBe(true);
+	expect(isTiffFile({ filename: "scan.TIFF" })).toBe(true);
+	expect(isTiffFile({ filename: "photo.dng.tif" })).toBe(true);
+	expect(isTiffFile({ filename: ".tif" })).toBe(true);
+	expect(isTiffFile({ filename: "photo.tif.dng" })).toBe(false);
+	expect(isTiffFile({ filename: "tif" })).toBe(false);
+	expect(isTiffFile({ filename: "" })).toBe(false);
+	expect(isTiffFile({ filename: "scan.btf" })).toBe(false);
+	expect(isTiffFile({ filename: "sample.jpg" })).toBe(false);
+	expect(isTiffFile({ filename: "sample.mp4" })).toBe(false);
+});
+
+it("isTiffFile is false for every RAW_EXTENSIONS member, .dng named explicitly (D-23)", () => {
+	for (const ext of RAW_EXTENSIONS) {
+		expect(isTiffFile({ filename: `sample${ext}` })).toBe(false);
+	}
+	expect(isTiffFile({ filename: "sample.dng" })).toBe(false);
+});
+
+it("TIFF_EXTENSIONS is disjoint from RAW_EXTENSIONS and from MEDIA_EXTENSIONS (D-23)", () => {
+	const tiffRawIntersection = [...TIFF_EXTENSIONS].filter((ext) =>
+		RAW_EXTENSIONS.has(ext),
+	);
+	const tiffMediaIntersection = [...TIFF_EXTENSIONS].filter((ext) =>
+		MEDIA_EXTENSIONS.has(ext),
+	);
+	expect(tiffRawIntersection).toEqual([]);
+	expect(tiffMediaIntersection).toEqual([]);
+});
+
+it("requiresVerifiedWrite routes raw, media, TIFF (both modes), and copy-mode webp/png/jpeg through the verified transaction, but not overwrite-mode webp/png/jpeg (D-11, D-23, D-24, ADP-03)", () => {
+	expect(
+		requiresVerifiedWrite({ filename: "sample.cr2", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.cr2", outputMode: "overwrite" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.mp4", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.mp4", outputMode: "overwrite" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.tif", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.tif", outputMode: "overwrite" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.tiff", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.tiff", outputMode: "overwrite" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.webp", outputMode: "copy" }),
+	).toBe(true);
+	// This phase intentionally leaves in-place webp overwrites on the unverified
+	// ExifTool path (D-19/D-24/D-42); out of scope for this plan.
+	expect(
+		requiresVerifiedWrite({ filename: "sample.webp", outputMode: "overwrite" }),
+	).toBe(false);
+	// ADP-03/D-11: png and jpeg saves-as-copy are now verified (widened
+	// requiresVerifiedWrite copy clause), but in-place overwrites of those formats
+	// stay on the direct path.
+	expect(
+		requiresVerifiedWrite({ filename: "sample.png", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.png", outputMode: "overwrite" }),
+	).toBe(false);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.jpg", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.jpg", outputMode: "overwrite" }),
+	).toBe(false);
+	expect(
+		requiresVerifiedWrite({ filename: "sample.jpeg", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresVerifiedWrite({ filename: "PHOTO.JPG", outputMode: "copy" }),
+	).toBe(true);
+});
+
+it("requiresCopyModeLeakCheck is true only for png/jpg/jpeg copies, false for webp/tiff/raw/media copies and any overwrite (D-11)", () => {
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.png", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.jpg", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.jpeg", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "PHOTO.JPG", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresCopyModeLeakCheck({
+			filename: "sample.png",
+			outputMode: "overwrite",
+		}),
+	).toBe(false);
+	expect(
+		requiresCopyModeLeakCheck({
+			filename: "sample.jpg",
+			outputMode: "overwrite",
+		}),
+	).toBe(false);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.webp", outputMode: "copy" }),
+	).toBe(false);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.tif", outputMode: "copy" }),
+	).toBe(false);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.cr2", outputMode: "copy" }),
+	).toBe(false);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.mp4", outputMode: "copy" }),
+	).toBe(false);
+});
+
+it("isMediaFile is false for png, jpg and jpeg; MEDIA_EXTENSIONS keeps its existing literal assertion (D-11)", () => {
+	expect(isMediaFile({ filename: "sample.png" })).toBe(false);
+	expect(isMediaFile({ filename: "sample.jpg" })).toBe(false);
+	expect(isMediaFile({ filename: "sample.jpeg" })).toBe(false);
+});
+
+it.each([["sample.heic"], ["SAMPLE.HEIC"], ["sample.heif"], ["sample.avif"]])(
+	"%s is verified and leak-checked in copy mode, neither in overwrite mode, and is not a media file (D-08)",
+	(filename) => {
+		expect(requiresVerifiedWrite({ filename, outputMode: "copy" })).toBe(true);
+		expect(requiresCopyModeLeakCheck({ filename, outputMode: "copy" })).toBe(
+			true,
+		);
+		expect(requiresVerifiedWrite({ filename, outputMode: "overwrite" })).toBe(
+			false,
+		);
+		expect(
+			requiresCopyModeLeakCheck({ filename, outputMode: "overwrite" }),
+		).toBe(false);
+		expect(isMediaFile({ filename })).toBe(false);
+	},
+);
+
+it("webp copies stay verified but are not leak-checked (D-08)", () => {
+	expect(
+		requiresVerifiedWrite({ filename: "sample.webp", outputMode: "copy" }),
+	).toBe(true);
+	expect(
+		requiresCopyModeLeakCheck({ filename: "sample.webp", outputMode: "copy" }),
+	).toBe(false);
+});
+
+it("copyModeLeakCheckDemandOf is required for leak-checked copies, when-allowlisted for other verified copies, undefined otherwise (D-08)", () => {
+	for (const filename of [
+		"a.png",
+		"a.jpg",
+		"a.jpeg",
+		"a.heic",
+		"a.HEIC",
+		"a.heif",
+		"a.avif",
+	]) {
+		expect(copyModeLeakCheckDemandOf({ filename, outputMode: "copy" })).toBe(
+			"required",
+		);
+	}
+	for (const filename of ["a.webp", "a.dng", "a.tif", "a.mp4", "a.mov"]) {
+		expect(copyModeLeakCheckDemandOf({ filename, outputMode: "copy" })).toBe(
+			"when-allowlisted",
+		);
+	}
+	for (const filename of ["a.webp", "a.dng", "a.tif", "a.mp4", "a.png"]) {
+		expect(
+			copyModeLeakCheckDemandOf({ filename, outputMode: "overwrite" }),
+		).toBeUndefined();
+	}
+	expect(
+		copyModeLeakCheckDemandOf({ filename: "a.txt", outputMode: "copy" }),
+	).toBeUndefined();
+});

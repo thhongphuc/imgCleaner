@@ -1,0 +1,203 @@
+// Pure domain logic — zero dependencies, zero I/O.
+// File extensions accepted by imgCleaner's verified processing contract.
+
+export const SUPPORTED_EXTENSIONS: ReadonlySet<string> = new Set([
+	// Images
+	".jpg",
+	".jpeg",
+	".png",
+	".gif",
+	".tiff",
+	".tif",
+	".webp",
+	".heic",
+	".heif",
+	".bmp",
+	".avif",
+	".svg",
+	".cr2",
+	".cr3",
+	".nef",
+	".arw",
+	".orf",
+	".rw2",
+	".raf",
+	".dng",
+	".pef",
+	".srw",
+	// Media
+	".mp4",
+	".mov",
+	".avi",
+	".m4a",
+	".m4v",
+	".3gp",
+	".wmv",
+	// Documents
+	".pdf",
+]);
+
+export const RAW_EXTENSIONS: ReadonlySet<string> = new Set([
+	".raf",
+	".cr2",
+	".cr3",
+	".nef",
+	".arw",
+	".orf",
+	".rw2",
+	".dng",
+	".pef",
+	".srw",
+]);
+
+const RAF_EXTENSIONS: ReadonlySet<string> = new Set([".raf"]);
+
+// Save-as-copy output for these formats is independently verified before publication.
+const VERIFIED_COPY_EXTENSIONS: ReadonlySet<string> = new Set([
+	".webp",
+	".png",
+	".jpg",
+	".jpeg",
+	".heic",
+	".heif",
+	".avif",
+]);
+
+// Deliberately narrower than VERIFIED_COPY_EXTENSIONS (D-11): the leak check (D-07/D-08) has a
+// measured allowlist for png and jpeg (58-SWEEP-MATRIX.md) and, from 63-02, heic/heif
+// (63-SWEEP-MATRIX.md); webp copies are verified (reopened, checked for a recognized
+// FileType/no Error) but not leak-checked -- no allowlist was measured for webp. An .avif copy
+// is leak-checked but has no allowlist until 63-09, so it fails closed (source kept).
+const LEAK_CHECKED_COPY_EXTENSIONS: ReadonlySet<string> = new Set([
+	".png",
+	".jpg",
+	".jpeg",
+	".heic",
+	".heif",
+	".avif",
+]);
+
+export const MEDIA_EXTENSIONS: ReadonlySet<string> = new Set([
+	".mp4",
+	".mov",
+	".avi",
+	".m4a",
+	".m4v",
+	".3gp",
+	".wmv",
+]);
+
+// Deliberately its own set, never folded into the media-format set above (D-23): that set
+// also drives the QuickTime date-removal argument list in the ExifTool adapter, and folding
+// TIFF in would change ExifTool's write behavior for TIFF files. Exported (unlike webp) so
+// the lock test can pin the literal.
+export const TIFF_EXTENSIONS: ReadonlySet<string> = new Set([".tif", ".tiff"]);
+
+interface IsSupportedFileParams {
+	filename: string;
+}
+
+export function isSupportedFile({ filename }: IsSupportedFileParams): boolean {
+	const lastDot = filename.lastIndexOf(".");
+	if (lastDot === -1) {
+		return false;
+	}
+	const ext = filename.substring(lastDot).toLowerCase();
+	return SUPPORTED_EXTENSIONS.has(ext);
+}
+
+export function isRawFile({ filename }: IsSupportedFileParams): boolean {
+	return hasExtension({ filename, extensions: RAW_EXTENSIONS });
+}
+
+export function isRafFile({ filename }: IsSupportedFileParams): boolean {
+	return hasExtension({ filename, extensions: RAF_EXTENSIONS });
+}
+
+export function isMediaFile({ filename }: IsSupportedFileParams): boolean {
+	return hasExtension({ filename, extensions: MEDIA_EXTENSIONS });
+}
+
+export function isTiffFile({ filename }: IsSupportedFileParams): boolean {
+	return hasExtension({ filename, extensions: TIFF_EXTENSIONS });
+}
+
+// Every verified copy-mode output is reopened and checked before publication.
+export function requiresVerifiedWrite({
+	filename,
+	outputMode,
+}: {
+	filename: string;
+	outputMode: "copy" | "overwrite";
+}): boolean {
+	if (
+		isRawFile({ filename }) ||
+		isMediaFile({ filename }) ||
+		isTiffFile({ filename })
+	) {
+		return true;
+	}
+	return (
+		outputMode === "copy" &&
+		hasExtension({ filename, extensions: VERIFIED_COPY_EXTENSIONS })
+	);
+}
+
+// D-07/D-08/D-11: whether a save-as-copy's verified reopen should additionally run the
+// measured fail-closed leak allowlist (58-SWEEP-MATRIX.md). Narrower than
+// requiresVerifiedWrite's copy clause -- only png/jpg/jpeg/heic/heif (and avif, failing closed until 63-09) are listed.
+export function requiresCopyModeLeakCheck({
+	filename,
+	outputMode,
+}: {
+	filename: string;
+	outputMode: "copy" | "overwrite";
+}): boolean {
+	return (
+		outputMode === "copy" &&
+		hasExtension({ filename, extensions: LEAK_CHECKED_COPY_EXTENSIONS })
+	);
+}
+
+export type CopyModeLeakCheckDemand = "required" | "when-allowlisted";
+
+// D-08/F-63-3: the leak check runs on every verified copy whose reopened FileType has an
+// allowlist, whatever the extension. "required" = the extension itself demands a check, so a
+// FileType without an allowlist fails closed. "when-allowlisted" = every other verified copy
+// name (.webp, RAW, TIFF, media): the check runs when the content reopens as an allowlisted
+// FileType (HEIC/JPEG bytes behind .webp or .tif), while genuine WebP/RAW/TIFF/media output
+// stays verify-only. Computed from the name only; the reopened FileType is the content signal.
+// Overwrite mode stays outside the copy-mode leak check.
+export function copyModeLeakCheckDemandOf({
+	filename,
+	outputMode,
+}: {
+	filename: string;
+	outputMode: "copy" | "overwrite";
+}): CopyModeLeakCheckDemand | undefined {
+	if (requiresCopyModeLeakCheck({ filename, outputMode })) {
+		return "required";
+	}
+	if (
+		outputMode === "copy" &&
+		requiresVerifiedWrite({ filename, outputMode })
+	) {
+		return "when-allowlisted";
+	}
+	return undefined;
+}
+
+function hasExtension({
+	filename,
+	extensions,
+}: {
+	filename: string;
+	extensions: ReadonlySet<string>;
+}): boolean {
+	const lastDot = filename.lastIndexOf(".");
+	if (lastDot === -1) {
+		return false;
+	}
+	const ext = filename.substring(lastDot).toLowerCase();
+	return extensions.has(ext);
+}

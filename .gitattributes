@@ -1,0 +1,30 @@
+* text=auto eol=lf
+
+*.pdf binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.webp binary
+*.tif binary
+*.tiff binary
+*.cr2 binary
+*.cr3 binary
+*.dng binary
+*.rw2 binary
+*.raf binary
+*.mp4 binary
+*.mov binary
+*.m4a binary
+*.mkv binary
+*.ico binary
+*.icns binary
+*.icc binary
+*.heic binary
+*.heif binary
+*.avif binary
+*.bmp binary
+*.avi binary
+*.wmv binary
+*.svg binary
+*.wasm binary
